@@ -1,0 +1,834 @@
+---
+output:
+  html_document: default
+  pdf_document: default
+---
+---
+
+# Projeto - Red Wine Quality
+
+### André Campos da Silva
+### 18 de Janeiro, 2021
+
+## Red Wine Quality
+Realizar uma análise nos dados e construir um modelo que permita determinar a qualidade do vinho em uma escala de 0 a 10,baseados nas variáveis preditoras 
+Dataset disponível no link - https://www.kaggle.com/uciml/red-wine-quality-cortez-et-al-2009/notebooks
+
+Os dois conjuntos de dados estão relacionados com as variantes tinto e branco do vinho "Vinho Verde" português. Para mais detalhes, consulte a referência [Cortez et al., 2009]. Devido a questões de privacidade e logística, apenas variáveis físico-químicas (entradas) e sensoriais (a saída) estão disponíveis (por exemplo, não há dados sobre os tipos de uva, marca de vinho, preço de venda do vinho, etc.).
+Esses conjuntos de dados podem ser vistos como tarefas de classificação ou regressão. As classes são ordenadas e não balanceadas (por exemplo, há muito mais vinhos normais do que excelentes ou ruins)
+
+Dcionario dos dados 
+Input variables (based on physicochemical tests):
+
+1 - fixed acidity - acidez_fixa
+
+2 - volatile acidity - acidez_volátil
+
+3 - citric acid - ácido_cítrico
+
+4 - residual sugar - açúcar_residual
+
+5 - chlorides - cloretos
+
+6 - free sulfur dioxide - dióxido_de_enxofre_livre
+
+7 - total sulfur dioxide - dióxido_de_enxofre_total
+
+8 - density - densidade
+
+9 - pH  - pH
+
+10 - sulphates - sulfatos
+
+11 - alcohol - álcool
+
+12 - quality (score between 0 and 10) - qualidade (pontuação entre 0 e 10) - variável target.
+
+## Coletando os dados
+
+``` {r}
+# Pacotes usados no projeto
+library('tidyverse')
+library('caret')
+library('ROSE')
+library('data.table')
+library('gridExtra')
+library('randomForest')
+library('DMwR')
+library('e1071')
+library('rpart')
+library('C50')
+library("ROCR")
+library('caTools')
+library('corrplot')
+library('kernlab')
+```
+
+## Carregando os Dados
+
+```{r}
+# Carrego o dataset para análise 
+
+df_train <- read_csv('Dados/winequality-red.csv')
+# Crio as colunas com os nomes em portugues
+col_names <- c('Acidez_fixa','Acidez_volátil','Ácido_cítrico','Açúcar_residual',
+                'Cloretos','Dióxido_de_enxofre_livre','Dióxido_de_enxofre_total',
+                  'Densidade','pH','Sulfatos','Álcool','Qualidade')
+# Crio as colunas com os nomes em portugues
+names(df_train) <- col_names
+
+df_train <- as.data.frame(df_train)
+
+# Verifico as primeiras linhas 
+head(df_train)
+```
+
+## Análise Exploratória de Dados
+
+```{r}
+# Dimensões dos dados
+dim(df_train)
+
+# Tipo dos dados das variáveis
+glimpse(df_train)
+
+# Sumário estatístico das variáveis
+summary(df_train)
+
+# Verifico se existe valores nulos nos dados
+sum(is.na(df_train))
+```
+### Analise em grafico de cada varável 
+#### Funções auxiliares
+```{r}
+dist_plot <- function(data, col) {
+  
+  ggplot() +
+    geom_density(aes(data[,col]), fill = '#4271AE', colour = "#1F3552") +
+    labs(title = paste('Distribuição da variável:',col), x = col) 
+    
+}
+
+box_plot <- function(data, col, title, xlab) {
+  
+  ggplot() +
+    geom_boxplot(aes(x = data[, col]), fill = '#4271AE', colour = "#1F3552") +
+    labs(title = paste('BoxPlot da variável:',col), x = col) +
+    theme(axis.text.y = element_blank())
+}
+
+bar_plot <- function(data, col, title, xlab) {
+  
+  ggplot() +
+    geom_bar(aes(x = data[, col]), fill = '#4271AE', colour = "#1F3552") +
+    labs(title = paste('Grafico de barra da variável: ',col), x = col)
+  
+}
+
+```
+
+#### Acidez_fixa  
+```{r}
+dist_plot(df_train, 'Acidez_fixa')
+```
+A varável aparente ter uma distribuição assimétrica positiva, dentre os níveis de acidez fixa, a 
+concentração maior fica um pouco abaixo do 8 aproximadamente. 
+
+```{r}
+box_plot(df_train, 'Acidez_fixa')
+```
+
+O boxplot mostra que a varável posse alguns outliers, alguns vinhos aparenta ter uma acidez fixa, muito acima do padrão. 
+
+
+#### Acidez_volátil  
+```{r}
+dist_plot(df_train, 'Acidez_volátil')
+```
+
+O gráfico mostra uma que existe dois picos de alta densidade no decorrer dos dados, nos níveis de acidez volátil 0.4 e 0.6 aproximadamente.
+
+
+```{r}
+box_plot(df_train, 'Acidez_volátil')
+```
+
+O gráfico mostra que a poucos vinhos possuem acidez volátil fora dos padrões, percebemos poucos outliers, indicando isso. 
+
+
+#### Ácido_cítrico
+```{r}
+dist_plot(df_train, 'Ácido_cítrico')
+```
+
+O gráfico mostra que existe uma distribuição variada com relação ao nível de ácido cítrico, e poucos são os vinhos que possuem o ácido cítrico muito alto. 
+
+```{r}
+box_plot(df_train, 'Ácido_cítrico')
+```
+
+O gráfico mostra apenas um valor fora do padrão, indicando que o praticamente todos os vinhos não tem uma diferença expressiva no fator ácido cítrico.
+
+
+#### Açúcar_residual
+```{r}
+dist_plot(df_train, 'Açúcar_residual')
+```
+
+O gráfico mostra uma concentração maior no nível de açúcar residual entre 0 ,3, indicando que boa parte dos vinhos possuem um nível de açúcar residual significativo.  
+
+```{r}
+box_plot(df_train, 'Açúcar_residual')
+```
+
+O gráfico mostra que embora a maioria dos vinhos possua um nível de açúcar residual dento da media, existe alguns que tem um nível maior, chamados outliers. 
+
+
+#### Cloretos
+```{r}
+dist_plot(df_train, 'Cloretos')
+```
+
+O gráfico mostra que o nível de cloreto tem uma concentração maior no valor 0,1 aproximadamente.  
+
+```{r}
+box_plot(df_train, 'Cloretos')
+```
+
+O gráfico mostra outliers tanto abaixo da média quanto acima, embora a concentração de cloretos fique em torno de 0.1 temos vinhos com concentrações poucos menores como pouco maiores.
+
+
+#### Dióxido_de_enxofre_livre
+```{r}
+dist_plot(df_train, 'Dióxido_de_enxofre_livre')
+```
+
+O gráfico mostra que o nível de dióxido de enxofre livre alto entre os valores 0 e 20 tendo uma diminuição bem acentuada a partir do 20. 
+
+```{r}
+box_plot(df_train, 'Dióxido_de_enxofre_livre')
+```
+
+O gráfico mostra poucos outliers, em sua maioria os vinhos possuem o nível de dióxido de enxofre livre dentro da média. 
+
+
+#### Dióxido_de_enxofre_total
+```{r}
+dist_plot(df_train, 'Dióxido_de_enxofre_total')
+```
+
+O gráfico mostra uma concentração grande de dióxido de enxofre total entre 0 e 30 aproximadamente, caindo gradativamente. 
+
+```{r}
+box_plot(df_train, 'Dióxido_de_enxofre_total')
+```
+
+O gráfico mostra que assim com o dióxido de enxofre livre o total, não possuem muitos outliers, em sua maioria os níveis estão dentro da média. 
+
+
+#### Densidade
+```{r}
+dist_plot(df_train, 'Densidade')
+```
+
+O gráfico mostra que a densidade aparenta ter uma distribuição normal perfeita. 
+
+```{r}
+box_plot(df_train, 'Densidade')
+```
+
+O gráfico mostra que a densidade posse outliers tanto abaixo quanto acima da média, embora poucos, existem vinhos com níveis de densidade abaixo e acima da média.  
+
+
+#### pH
+```{r}
+dist_plot(df_train, 'pH')
+```
+
+O gráfico mostra que a densidade aparenta ter uma distribuição normal perfeita.
+
+```{r}
+box_plot(df_train, 'pH')
+```
+
+O gráfico mostra outliers tanto abaixo quanto acima da média, embora poucos, existem vinhos com níveis de pH abaixo e acima da média.  
+
+
+#### Sulfatos
+```{r}
+dist_plot(df_train, 'Sulfatos')
+```
+
+O gráfico mostra que os níveis de sulfatos nos vinhos possuem um pico entre 0.5 a 0.7 aproximadamente .
+
+```{r}
+box_plot(df_train, 'Sulfatos')
+```
+
+O gráfico mostra que os níveis de sulfatos nos vinhos possuem alguns outliers acima da média.
+
+
+#### Álcool
+```{r}
+dist_plot(df_train, 'Álcool')
+```
+
+O gráfico mostra que os níveis de álcool nos vinhos possuem uma boa distribuição, apenas com um pico maior no nível de valor 8 aproximadamente.  
+
+```{r}
+box_plot(df_train, 'Álcool')
+```
+
+O gráfico mostra que os níveis de álcool nos vinhos possuem pouquíssimos outliers, isso se dá pela grande destruição vista no gráfico anterior, indicando que os níveis de álcool nos vinhos não possuem tanta diferença entre um vinho e outro apenas com algumas exceções. 
+
+
+#### Qualidade
+```{r}
+bar_plot(df_train, 'Qualidade')
+```
+
+Podemos ver que os dados realmente não estão balanceados, temos muitos mais vinhos com qualidade nível 5 e 6 do que os demais, indicando que a maioria dos vinhos estão em um nível médio para bom.
+
+
+
+### Gráfico com o nível Max e Min de cada componente do vinho agrupado pela sua qualidade.
+
+#### Acidez_fixa
+```{r}
+plot1 <- df_train %>%
+        select(Acidez_fixa,Qualidade)%>%
+        group_by(Qualidade)%>%
+        summarise(Max= max(Acidez_fixa))%>%
+        ggplot() + 
+        geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+        labs( title = paste('Quantidade máxima de Acidez_fixa por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Acidez_fixa,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Acidez_fixa))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Acidez_fixa por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico mostra uma que para um vinho ser considerado ótimo o nível de acidez fixa não pode ser nem muito alto nem muito baixo, considerando o vinho de nível 8 o melhor nível de acidez gira em torno de 4 a 10 aproximadamente.
+
+
+#### Acidez_volátil
+```{r}
+plot1 <- df_train %>%
+  select(Acidez_volátil,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Acidez_volátil))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Acidez_volátil por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Acidez_volátil,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Acidez_volátil))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Acidez_volátil por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico mostra assim como a acidez fixa para um vinho ser considerado ótimo o nível de acidez volátil não pode ser nem muito alto nem muito baixo, considerando o vinho de nível 8 o melhor nível de acidez volátil  gira em torno de 0.2 a 1 aproximadamente. 
+
+
+#### Ácido_cítrico
+```{r}
+plot1 <- df_train %>%
+  select(Ácido_cítrico,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Ácido_cítrico))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Ácido_cítrico por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Ácido_cítrico,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Ácido_cítrico))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Ácido_cítrico por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico que vinhos de qualidade 7 e inferior praticamente não possuem nível mínimo de Ácido critico, e o melhor vinho de novel 8 está entre o que tem menor nível máximo.
+
+
+#### Açúcar_residual
+```{r}
+plot1 <- df_train %>%
+  select(Açúcar_residual,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Açúcar_residual))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Açúcar_residual por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Açúcar_residual,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Açúcar_residual))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Açúcar_residual por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico mostra que a quantidade de açúcar residual para um nível considerado de qualidade ótima deve estar entre 1 e 5 aproximadamente. 
+
+
+#### Cloretos
+```{r}
+plot1 <- df_train %>%
+  select(Cloretos,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Cloretos))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Cloretos por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Cloretos,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Cloretos))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Cloretos por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico mostra que o nível de cloreto entre 0.04 a 0.2 é o nível ideal para um vinho de qualidade ótima, e que uma quantidade grande pode prejudicar na qualidade. 
+
+
+#### Dióxido_de_enxofre_livre
+```{r}
+plot1 <- df_train %>%
+  select(Dióxido_de_enxofre_livre,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Dióxido_de_enxofre_livre))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Dióxido_de_enxofre_livre por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Dióxido_de_enxofre_livre,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Dióxido_de_enxofre_livre))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Dióxido_de_enxofre_livre por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico mostra que o nível de enxofre livre entre 3 a 40 aproximadamente é o nível ideal para um vinho de qualidade ótima, e que uma quantidade grande pode prejudicar na qualidade. Embora mostre que o nível de enxofre livre não é um fator aparentemente tão relevante, considerando que o vinho de pior qualidade tem uma relação de mínimo e máximo bem parecida com o de melhor qualidade. 
+
+
+#### Dióxido_de_enxofre_total
+```{r}
+plot1 <- df_train %>%
+  select(Dióxido_de_enxofre_total,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Dióxido_de_enxofre_total))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Dióxido_de_enxofre_total por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Dióxido_de_enxofre_total,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Dióxido_de_enxofre_total))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Dióxido_de_enxofre_total por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico mostra que o nível de enxofre total entre 12 a 100 aproximadamente é o nível ideal para um vinho de qualidade ótima, assim como o enxofre livre o total não é um fator aparentemente tão relevante, considerando que o vinho de pior qualidade tem uma relação de mínimo e máximo bem parecida com o de melhor qualidade. 
+
+
+#### Densidade
+```{r}
+plot1 <- df_train %>%
+  select(Densidade,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Densidade))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Densidade por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Densidade,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Densidade))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Densidade por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O nível máximo e mínimo de densidade é exatamente igual para os níveis de qualidade dos vinhos apresentados
+
+
+#### pH
+```{r}
+plot1 <- df_train %>%
+  select(pH,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(pH))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de pH por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(pH,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(pH))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de pH por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O nível máximo e mínimo de pH é praticamente igual para os níveis de qualidade dos vinhos apresentados.  
+
+
+#### Sulfatos
+```{r}
+plot1 <- df_train %>%
+  select(Sulfatos,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Sulfatos))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Sulfatos por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Sulfatos,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Sulfatos))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Sulfatos por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico mostra um nível de sulfato ideal de sulfato para um vinho de melhor qualidade entre 0.6 a 1.0 aproximadamente, e que um nível muito alto de sulfato pode interferir negativamente na sua qualidade. 
+
+
+#### Álcool
+```{r}
+plot1 <- df_train %>%
+  select(Álcool,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Max= max(Álcool))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Max),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade máxima de Álcool por nível de qualidade do vinho.'))
+
+plot2 <- df_train %>%
+  select(Álcool,Qualidade)%>%
+  group_by(Qualidade)%>%
+  summarise(Min= min(Álcool))%>%
+  ggplot() + 
+  geom_bar(aes (x = Qualidade, y= Min),stat = "identity",color = "#1F3552", fill = "#4271AE") + 
+  labs( title = paste('Quantidade mínima de Álcool por nível de qualidade do vinho'))
+
+grid.arrange(plot1, plot2)
+```
+
+O gráfico mostra que vinhos de melhores qualidades tende a ter um teor de álcool maior geralmente entre 10 a 15. Já os vinhos de pior qualidade o contrário.  
+
+
+### Correlação das variáveis
+
+#### Faço um grafico de correlação com o corrplot
+```{r}
+corelacao <- cor(df_train, method = )
+corrplot(corelacao, type = "upper")
+```
+
+O gráfico de correlação mostra que as variáveis acidez volátil, acidez cítrico, álcool, dióxido de enxofre total e densidade são as com melhores correlação com a variável target qualidade. 
+
+
+
+## Tratamento dos dados
+Converterei a target que são 6 valores para 3 onde 3,4 valerão 1 com label ruim, 4,5 valerão 5 com label médio, e 7,8 valerão 10 com label excelente. 
+
+```{r}
+# Crio a função que fara a conversão 
+cria_label <- function(data){
+  if (data == 3 || data == 4){
+    data = 1
+  }
+  else if  (data == 5 || data == 6){
+    data = 5
+  }
+  else if  (data == 7 || data == 8){
+    data = 10
+  }
+}
+```
+
+```{r}
+# Crio a nova target para a Qualidade
+df_train$Qualidade <- sapply(df_train$Qualidade, cria_label)
+# Converto a variável targe para factor.
+df_train$Qualidade <- as.factor(df_train$Qualidade)
+glimpse(df_train)
+
+# Separo as variáveis preditoras da target. 
+features_train <- df_train[1:11]
+Qualidade <- as.factor(df_train$Qualidade)
+head(features_train)
+head(Qualidade)
+```
+
+## Normalização dos dados
+As variáveis preditoras estão em escalas diferentes e isso para os modelos não é interessante, irei usar a função min max scaler e a scaler para criar dois tipos de dados para fazer a seleção das variáveis e treinar os modelos.  
+
+```{r}
+# Min Max Scaler
+normalize = function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+
+features_trainMM <- sapply(features_train, normalize)
+head(features_trainMM)
+# scale 
+
+features_trainS <- sapply(features_train, scale)
+head(features_trainS)
+
+## Crio um Data frame para cada dado nromalizado com a variavel targe. 
+
+# Dados Min Max Scaler
+df_trainMM <- as.data.frame(features_trainMM)
+df_trainMM['Qualidade'] <- Qualidade
+head(df_trainMM)
+
+# Dados Scaler
+df_trainS <- as.data.frame(features_trainS)
+df_trainS['Qualidade'] <- Qualidade
+head(df_trainS)
+```
+
+
+## Feature Selection (Seleção de Variáveis)
+Usarei o modelo randomForest e para seleção das melhores variáveis para cada features normalizada. 
+
+### Dados Min Max Scaler
+```{r}
+#Random Forest Dados  
+feature_selectionMM <- randomForest(Qualidade ~ .,
+                                  data = df_trainMM, 
+                                  ntree = 100, nodesize = 10, importance = T)
+varImpPlot(feature_selectionMM)
+
+```
+
+### Dados Scaler
+
+```{r}
+#Random Forest Dados  
+
+feature_selectionMM <- randomForest(Qualidade ~ .,
+                                    data = df_trainS, 
+                                    ntree = 100, nodesize = 10, importance = T)
+varImpPlot(feature_selectionMM)
+
+```
+
+```{r}
+# Ambos os modelos e tipos de dados tiveram o mesmo resultado determinando as melhores variáveis.  
+best_var <- c('Álcool','Acidez_volátil','Sulfatos','Dióxido_de_enxofre_total','Cloretos', 'Densidade', 'Qualidade')
+```
+
+
+```{r}
+# Seleciono apenas as variáveis mais importantes e a target em um novo DF para o treinamento dos modelos.  
+# Faço para os dados no Min Max Scaler
+best_df_trainMM <- df_trainMM[best_var]
+best_df_trainMM$Qualidade <- as.factor(best_df_trainMM$Qualidade)
+# Faço para os dados no Scaler
+best_df_trainS <- df_trainS[best_var]
+best_df_trainS$Qualidade <- as.factor(best_df_trainS$Qualidade)
+```
+
+
+## Split dos dados
+Crio os dados de treino e teste em cada escala para o treinamento dos algoritmos.
+
+
+```{r}
+# Min Max Scaler
+splitMM = sample.split(best_df_trainMM$Densidade, SplitRatio = 0.80)
+trainMM = subset(best_df_trainMM, splitMM == TRUE)
+testMM = subset(best_df_trainMM, splitMM == FALSE)
+
+
+# Scaler
+splitS = sample.split(best_df_trainS$Densidade, SplitRatio = 0.80)
+trainS = subset(best_df_trainS, splitS == TRUE)
+testS = subset(best_df_trainS, splitS == FALSE)
+```
+
+## Balanceamento dos dados 
+Como já vimos temos que balancear a target em cada DF, pois está muito desbalanceada e pode tendenciar os modelos de aprendizagem. 
+Passo duas vezes o smote, pois temos muitos poucos dados para treinar com ele eu aumento a quantidade dos dados e deixo balanceado.
+
+
+```{r}
+# Balanceando  a TrainMM
+trainMM <- SMOTE(Qualidade ~ .,data =trainMM,perc.over = 10000, perc.under = 120)
+trainMM <- SMOTE(Qualidade ~ .,data =trainMM,perc.over = 1000, perc.under = 210)
+table(trainMM$Qualidade)
+ggplot(trainMM, aes(x = Qualidade)) + geom_bar()
+
+
+# Balanceando  a TrainS
+trainS <- SMOTE(Qualidade ~ .,data =trainS,perc.over = 10000, perc.under = 120)
+trainS <- SMOTE(Qualidade ~ .,data =trainS,perc.over = 1000, perc.under = 210)
+table(trainS$Qualidade)
+ggplot(trainS, aes(x = Qualidade)) + geom_bar()
+```
+
+
+## Algoritmos de aprendizagem 
+
+### Dados com o Min Max Scaler
+
+
+```{r}
+# Modelo  com o KSVM  library(kernlab)            
+ 
+modelo_v1 <- ksvm(Qualidade ~ .
+                  ,data= trainMM,type="C-bsvc", kernel = "rbfdot")
+previsao_v1 <- predict(modelo_v1, testMM)
+confusionMatrix(previsao_v1,testMM$Qualidade)
+```
+
+
+```{r}
+# Modelo  com o RandomForest library('randomForest') 
+modelo_v2 <- randomForest(Qualidade ~ .
+                  ,data= trainMM,ntree = 100,
+                  nodesize = 10,method="repeatedcv",
+                  number=15, repeats=10)
+previsao_v2 <- predict(modelo_v2, testMM)
+confusionMatrix(previsao_v2,testMM$Qualidade)
+```
+
+
+```{r}
+# Modelo svm do pacote library(e1071)
+modelo_v3 <- svm(Qualidade ~ .
+                          ,data= trainMM,type = 'C-classification',kernel = 'radial',
+                          cost = 10, scale = FALSE,gamma = 0.1)
+previsao_v3 <- predict(modelo_v3, testMM)
+confusionMatrix(previsao_v3,testMM$Qualidade)
+```
+
+```{r}
+# Modelo   naiveBayes do  pacote library(e1071)
+modelo_v4 <- naiveBayes(Qualidade ~ .
+                          ,data= trainMM, laplace=3)
+previsao_v4 <- predict(modelo_v4, testMM, type="class")
+confusionMatrix(previsao_v4,testMM$Qualidade)
+```
+
+```{r}
+# Modelo com o C5.0 e library(C50)
+modelo_v5 <- C5.0(Qualidade ~ .
+                        ,data= trainMM,trials = 100)
+previsao_v5 <- predict(modelo_v5, testMM)
+confusionMatrix(previsao_v5,testMM$Qualidade)
+
+```
+
+```{r}
+# Modelo com o library(rpart)
+modelo_v6 <- rpart(Qualidade ~ .
+                        ,data= trainMM,control = rpart.control(cp = .0005), method = 'class')
+previsao_v6 <- predict(modelo_v6, testMM, type = 'class')
+confusionMatrix(previsao_v6,testMM$Qualidade)
+```
+
+
+### Dados com o Scaler
+
+
+```{r}
+# Modelo  com o KSVM  library(kernlab)            
+
+modelo_v7 <- ksvm(Qualidade ~ .
+                  ,data= trainS,type="C-bsvc", kernel = "rbfdot")
+previsao_v7 <- predict(modelo_v7, testS)
+confusionMatrix(previsao_v7,testS$Qualidade)
+```
+
+```{r}
+# Modelo  com o RandomForest library('randomForest') 
+modelo_v8 <- randomForest(Qualidade ~ .
+                          ,data= trainS,ntree = 100 ,
+                          nodesize = 10,method="repeatedcv",
+                          number=15, repeats=10)
+previsao_v8 <- predict(modelo_v8, testS)
+confusionMatrix(previsao_v8,testS$Qualidade)
+```
+
+```{r}
+# Modelo svm do pacote library(e1071)
+modelo_v9 <- svm(Qualidade ~ .
+                 ,data= trainS,type = 'C-classification',
+                 kernel = 'radial',cost = 10, scale = FALSE)
+previsao_v9 <- predict(modelo_v9, testS)
+confusionMatrix(previsao_v9,testS$Qualidade)
+```
+
+```{r}
+# Modelo   naiveBayes do  pacote library(e1071)
+modelo_v10 <- naiveBayes(Qualidade ~ .
+                        ,data= trainS, laplace=1)
+previsao_v10 <- predict(modelo_v10, testS, type="class")
+confusionMatrix(previsao_v10,testS$Qualidade)
+```
+
+```{r}
+# Modelo com o C5.0 e library(C50)
+modelo_v11 <- C5.0(Qualidade ~ .
+                        ,data= trainS,trials = 100)
+previsao_v11 <- predict(modelo_v11, testS)
+confusionMatrix(previsao_v11,testS$Qualidade)
+```
+
+```{r}
+# Modelo com o library(rpart)
+modelo_v12 <- rpart(Qualidade ~ .
+                   ,data= trainS,control = rpart.control(cp = .0005), method = 'class')
+previsao_v12 <- predict(modelo_v12, testS, type = 'class')
+confusionMatrix(previsao_v12,testS$Qualidade)
+```
+
+## Considerações Finais
+Com a pouca quantidade de dados, a acurácia fica um pouco comprometida pois, o modelo não tem tantos dados para aprender, mesmo assim tivemos um bom aproveitamento com os modelos randomForest e o C5.0, tanto nos dados Min Max Scaler quanto no Scaler, escolheria  algum desse modelos para os novos dados.  
+
+### Obrigado! Entre em contato comigo acessando meu portifolio (https://campos1989.github.io/) no menu contato!
+
